@@ -3,7 +3,7 @@
 //  ffttest
 //
 //  Created by Christopher Helf on 17.08.15.
-//  Copyright (c) 2015 Christopher Helf. All rights reserved.
+//  Copyright (c) 2015-Present Christopher Helf. All rights reserved.
 //
 
 import Foundation
@@ -19,7 +19,7 @@ let seconds = 2.0
 let fps = Double(n)/seconds
 
 var sineWave = (0..<n).map {
-    amplitude1 * sin(2.0 * M_PI / fps * Double($0) * frequency1 + phase1)
+    amplitude1 * sin(2.0 * .pi / fps * Double($0) * frequency1 + phase1)
 }
 
 fft.calculate(sineWave, fps: fps)
