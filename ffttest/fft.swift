@@ -3,7 +3,7 @@
 //  ffttest
 //
 //  Created by Christopher Helf on 17.08.15.
-//  Copyright (c) 2015 Christopher Helf. All rights reserved.
+//  Copyright (c) 2015-Present Christopher Helf. All rights reserved.
 //  Adapted From https://gerrybeauregard.wordpress.com/2013/01/28/using-apples-vdspaccelerate-fft/
 
 import Foundation
@@ -11,8 +11,7 @@ import Accelerate
 
 class FFT {
     
-    private func getFrequencies(N: Int, fps: Double) -> [Double] {
-    
+    fileprivate func getFrequencies(_ N: Int, fps: Double) -> [Double] {
         // Create an Array with the Frequencies
         let freqs = (0..<N/2).map {
             fps/Double(N)*Double($0)
@@ -21,21 +20,20 @@ class FFT {
         return freqs
     }
     
-    private func generateBandPassFilter(freqs: [Double]) -> ([Double], Int, Int) {
-        
+    fileprivate func generateBandPassFilter(_ freqs: [Double]) -> ([Double], Int, Int) {
         var minIdx = freqs.count+1
         var maxIdx = -1
         
-        let bandPassFilter: [Double] = map(enumerate(freqs)) { (index, element) in
-            if (element >= self.lowerFreq && element <= self.higherFreq) {
+        let bandPassFilter: [Double] = freqs.map {
+            if ($0 >= self.lowerFreq && $0 <= self.higherFreq) {
                 return 1.0
             } else {
                 return 0.0
             }
         }
         
-        for(var i=0; i<bandPassFilter.count; i++) {
-            if(bandPassFilter[i]==1.0) {
+        for (i, element) in bandPassFilter.enumerated() {
+            if (element == 1.0) {
                 if(i<minIdx || minIdx == freqs.count+1) {
                     minIdx=i
                 }
@@ -49,11 +47,9 @@ class FFT {
         assert(minIdx != freqs.count+1)
         
         return (bandPassFilter, minIdx, maxIdx)
-        
     }
     
-    func calculate(_values: [Double], fps: Double) {
-        
+    func calculate(_ _values: [Double], fps: Double) {
         // ----------------------------------------------------------------
         // Copy of our input
         // ----------------------------------------------------------------
@@ -69,26 +65,27 @@ class FFT {
         // ----------------------------------------------------------------
         // FFT & Variables Setup
         // ----------------------------------------------------------------
-        let fftSetup: FFTSetupD = vDSP_create_fftsetupD(LOG_N, FFTRadix(kFFTRadix2))
+        let fftSetup: FFTSetupD = vDSP_create_fftsetupD(LOG_N, FFTRadix(kFFTRadix2))!
         
         // We need complex buffers in two different formats!
-        var tempComplex : [DSPDoubleComplex] = [DSPDoubleComplex](count: N/2, repeatedValue: DSPDoubleComplex())
+        var tempComplex : [DSPDoubleComplex] = [DSPDoubleComplex](repeating: DSPDoubleComplex(), count: N/2)
         
-        var tempSplitComplexReal : [Double] = [Double](count: N/2, repeatedValue: 0.0)
-        var tempSplitComplexImag : [Double] = [Double](count: N/2, repeatedValue: 0.0)
+        var tempSplitComplexReal : [Double] = [Double](repeating: 0.0, count: N/2)
+        var tempSplitComplexImag : [Double] = [Double](repeating: 0.0, count: N/2)
         var tempSplitComplex : DSPDoubleSplitComplex = DSPDoubleSplitComplex(realp: &tempSplitComplexReal, imagp: &tempSplitComplexImag)
         
         // For polar coordinates
-        var mag : [Double] = [Double](count: N/2, repeatedValue: 0.0)
-        var phase : [Double] = [Double](count: N/2, repeatedValue: 0.0)
+        var mag : [Double] = [Double](repeating: 0.0, count: N/2)
+        var phase : [Double] = [Double](repeating: 0.0, count: N/2)
         
         // ----------------------------------------------------------------
         // Forward FFT
         // ----------------------------------------------------------------
         
-        var valuesAsComplex : UnsafeMutablePointer<DSPDoubleComplex>?
-        values.withUnsafeBufferPointer { (resultPointer: UnsafeBufferPointer<Double>) -> Void in
-            valuesAsComplex = UnsafeMutablePointer<DSPDoubleComplex>( resultPointer.baseAddress )
+        var valuesAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
+        
+        values.withUnsafeMutableBytes {
+            valuesAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values.count)
         }
         
         // Scramble-pack the real data into complex buffer in just the way that's
@@ -102,14 +99,14 @@ class FFT {
         // Get the Frequency Spectrum
         // ----------------------------------------------------------------
         
-        var fftMagnitudes = [Double](count:N/2, repeatedValue:0.0)
+        var fftMagnitudes = [Double](repeating: 0.0, count: N/2)
         vDSP_zvmagsD(&tempSplitComplex, 1, &fftMagnitudes, 1, N2);
         
         // vDSP_zvmagsD returns squares of the FFT magnitudes, so take the root here
         let roots = sqrt(fftMagnitudes)
         
         // Normalize the Amplitudes
-        var fullSpectrum = [Double](count:N/2, repeatedValue:0.0)
+        var fullSpectrum = [Double](repeating: 0.0, count: N/2)
         vDSP_vsmulD(roots, vDSP_Stride(1), [1.0 / Double(N)], &fullSpectrum, 1, N2)
         
         // ----------------------------------------------------------------
@@ -122,10 +119,7 @@ class FFT {
         // Beware: Outputted phase here between -PI and +PI
         // https://developer.apple.com/library/prerelease/ios/documentation/Accelerate/Reference/vDSPRef/index.html#//apple_ref/c/func/vDSP_zvphasD
         vDSP_zvphasD(&tempSplitComplex, 1, &phase, 1, N2);
-        
-        // Save this variable for output
-        var fullPhases = phase
-        
+                
         // ----------------------------------------------------------------
         // Bandpass Filtering
         // ----------------------------------------------------------------
@@ -140,29 +134,30 @@ class FFT {
         phase = mul(phase, y: bandPassFilter.0)
         
         // Output Variables
-        var filteredSpectrum = mul(fullSpectrum, y: bandPassFilter.0)
+        let filteredSpectrum = mul(fullSpectrum, y: bandPassFilter.0)
         var filteredPhase = phase
         
         // ----------------------------------------------------------------
         // Determine Maximum Frequency
         // ----------------------------------------------------------------
-        var maxFrequencyResult = max(filteredSpectrum)
-        var maxFrequency = freqs[maxFrequencyResult.1]
-        var maxPhase = filteredPhase[maxFrequencyResult.1]
+        let maxFrequencyResult = max(filteredSpectrum)
+        let maxFrequency = freqs[maxFrequencyResult.1]
+        let maxPhase = filteredPhase[maxFrequencyResult.1]
         
-        println("Amplitude: \(maxFrequencyResult.0)")
-        println("Frequency: \(maxFrequency)")
-        println("Phase: \(maxPhase + M_PI/2)")
+        print("Amplitude: \(maxFrequencyResult.0)")
+        print("Frequency: \(maxFrequency)")
+        print("Phase: \(maxPhase + .pi / 2)")
         
         // ----------------------------------------------------------------
         // Convert from polar coordinates back to rectangular coordinates.
         // ----------------------------------------------------------------
         
         tempSplitComplex = DSPDoubleSplitComplex(realp: &mag, imagp: &phase)
+
+        var complexAsValue : UnsafeMutablePointer<Double>? = nil
         
-        var complexAsValue : UnsafeMutablePointer<Double>?
-        tempComplex.withUnsafeBufferPointer { (resultPointer: UnsafeBufferPointer<DSPDoubleComplex>) -> Void in
-            complexAsValue = UnsafeMutablePointer<Double>( resultPointer.baseAddress )
+        tempComplex.withUnsafeMutableBytes {
+            complexAsValue = $0.baseAddress?.bindMemory(to: Double.self, capacity: values.count)
         }
         
         vDSP_ztocD(&tempSplitComplex, 1, &tempComplex, 2, N2);
@@ -174,11 +169,11 @@ class FFT {
         // ----------------------------------------------------------------
         
         // Create result
-        var result : [Double] = [Double](count: N, repeatedValue: 0.0)
-        var resultAsComplex : UnsafeMutablePointer<DSPDoubleComplex>?
-
-        result.withUnsafeBufferPointer { (resultPointer: UnsafeBufferPointer<Double>) -> Void in
-            resultAsComplex = UnsafeMutablePointer<DSPDoubleComplex>( resultPointer.baseAddress )
+        var result : [Double] = [Double](repeating: 0.0, count: N)
+        var resultAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
+        
+        result.withUnsafeMutableBytes {
+            resultAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values.count)
         }
 
         // Do complex->real inverse FFT.
@@ -192,10 +187,9 @@ class FFT {
         vDSP_vsmulD(&result, 1, &scale, &result, 1, vDSP_Length(N));
  
         // Print Result
-        for(var k=0; k<N; k++) {
-            println("\(k)   \(values[k])     \(result[k])")
+        for k in 0 ..< N {
+            print("\(k)   \(values[k])     \(result[k])")
         }
-
     }
     
     // The bandpass frequencies
@@ -203,23 +197,25 @@ class FFT {
     let higherFreq: Double = 5
     
     // Some Math functions on Arrays
-    func mul(x: [Double], y: [Double]) -> [Double] {
-        var results = [Double](count: x.count, repeatedValue: 0.0)
+    func mul(_ x: [Double], y: [Double]) -> [Double] {
+        var results = [Double](repeating: 0.0, count: x.count)
         vDSP_vmulD(x, 1, y, 1, &results, 1, vDSP_Length(x.count))
+
         return results
     }
     
-    func sqrt(x: [Double]) -> [Double] {
-        var results = [Double](count:x.count, repeatedValue:0.0)
+    func sqrt(_ x: [Double]) -> [Double] {
+        var results = [Double](repeating: 0.0, count: x.count)
         vvsqrt(&results, x, [Int32(x.count)])
+
         return results
     }
     
-    func max(x: [Double]) -> (Double, Int) {
+    func max(_ x: [Double]) -> (Double, Int) {
         var result: Double = 0.0
         var idx : vDSP_Length = vDSP_Length(0)
         vDSP_maxviD(x, 1, &result, &idx, vDSP_Length(x.count))
+
         return (result, Int(idx))
     }
-    
 }
