@@ -184,8 +184,10 @@ class FFT {
         
         // Neither the forward nor inverse FFT does any scaling. Here we compensate for that.
         var scale : Double = 0.5/Double(N);
-        vDSP_vsmulD(&result, 1, &scale, &result, 1, vDSP_Length(N));
- 
+        var copyOfResult = result;
+        vDSP_vsmulD(&result, 1, &scale, &copyOfResult, 1, vDSP_Length(N));
+        result = copyOfResult
+        
         // Print Result
         for k in 0 ..< N {
             print("\(k)   \(values[k])     \(result[k])")
