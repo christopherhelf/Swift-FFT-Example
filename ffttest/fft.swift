@@ -53,7 +53,8 @@ class FFT {
         // ----------------------------------------------------------------
         // Copy of our input
         // ----------------------------------------------------------------
-        var values = _values
+        let values1 = _values
+        var values = values1  // need this to avoid error below
         
         // ----------------------------------------------------------------
         // Size Variables
@@ -85,7 +86,7 @@ class FFT {
         var valuesAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
         
         values.withUnsafeMutableBytes {
-            valuesAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values.count)
+            valuesAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values1.count)
         }
         
         // Scramble-pack the real data into complex buffer in just the way that's
