@@ -101,7 +101,7 @@
 				};
 			};
 			buildConfigurationList = 9D149E401B82226B00FF68B2 /* Build configuration list for PBXProject "ffttest" */;
-			compatibilityVersion = "Xcode 3.2";
+			compatibilityVersion = "Xcode 5.2";
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -218,7 +218,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 3.0;
+				SWIFT_VERSION = 5.2;
 			};
 			name = Debug;
 		};
@@ -226,7 +226,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 3.0;
+				SWIFT_VERSION = 5.2;
 			};
 			name = Release;
 		};
