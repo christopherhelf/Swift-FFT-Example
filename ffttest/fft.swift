@@ -73,125 +73,136 @@ class FFT {
         
         var tempSplitComplexReal : [Double] = [Double](repeating: 0.0, count: N/2)
         var tempSplitComplexImag : [Double] = [Double](repeating: 0.0, count: N/2)
-        var tempSplitComplex : DSPDoubleSplitComplex = DSPDoubleSplitComplex(realp: &tempSplitComplexReal, imagp: &tempSplitComplexImag)
-        
-        // For polar coordinates
-        var mag : [Double] = [Double](repeating: 0.0, count: N/2)
-        var phase : [Double] = [Double](repeating: 0.0, count: N/2)
-        
-        // ----------------------------------------------------------------
-        // Forward FFT
-        // ----------------------------------------------------------------
-        
-        var valuesAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
-        
-        values.withUnsafeMutableBytes {
-            valuesAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values1.count)
-        }
-        
-        // Scramble-pack the real data into complex buffer in just the way that's
-        // required by the real-to-complex FFT function that follows.
-        vDSP_ctozD(valuesAsComplex!, 2, &tempSplitComplex, 1, N2);
-        
-        // Do real->complex forward FFT
-        vDSP_fft_zripD(fftSetup, &tempSplitComplex, 1, LOG_N, FFTDirection(FFT_FORWARD));
-        
-        // ----------------------------------------------------------------
-        // Get the Frequency Spectrum
-        // ----------------------------------------------------------------
-        
-        var fftMagnitudes = [Double](repeating: 0.0, count: N/2)
-        vDSP_zvmagsD(&tempSplitComplex, 1, &fftMagnitudes, 1, N2);
-        
-        // vDSP_zvmagsD returns squares of the FFT magnitudes, so take the root here
-        let roots = sqrt(fftMagnitudes)
-        
-        // Normalize the Amplitudes
-        var fullSpectrum = [Double](repeating: 0.0, count: N/2)
-        vDSP_vsmulD(roots, vDSP_Stride(1), [1.0 / Double(N)], &fullSpectrum, 1, N2)
-        
-        // ----------------------------------------------------------------
-        // Convert from complex/rectangular (real, imaginary) coordinates
-        // to polar (magnitude and phase) coordinates.
-        // ----------------------------------------------------------------
-        
-        vDSP_zvabsD(&tempSplitComplex, 1, &mag, 1, N2);
-        
-        // Beware: Outputted phase here between -PI and +PI
-        // https://developer.apple.com/library/prerelease/ios/documentation/Accelerate/Reference/vDSPRef/index.html#//apple_ref/c/func/vDSP_zvphasD
-        vDSP_zvphasD(&tempSplitComplex, 1, &phase, 1, N2);
+		
+		// For polar coordinates
+		var mag : [Double] = [Double](repeating: 0.0, count: N/2)
+		var phase : [Double] = [Double](repeating: 0.0, count: N/2)
+		
+        tempSplitComplexReal.withUnsafeMutableBufferPointer { tempSplitComplexRealPtr in
+            tempSplitComplexImag.withUnsafeMutableBufferPointer { tempSplitComplexImagPtr in
+                var tempSplitComplex = DSPDoubleSplitComplex(realp: tempSplitComplexRealPtr.baseAddress!,
+                                                             imagp: tempSplitComplexImagPtr.baseAddress!)
                 
-        // ----------------------------------------------------------------
-        // Bandpass Filtering
-        // ----------------------------------------------------------------
-        
-        // Get the Frequencies for the current Framerate
-        let freqs = getFrequencies(N,fps: fps)
-        // Get a Bandpass Filter
-        let bandPassFilter = generateBandPassFilter(freqs)
-        
-        // Multiply phase and magnitude with the bandpass filter
-        mag = mul(mag, y: bandPassFilter.0)
-        phase = mul(phase, y: bandPassFilter.0)
-        
-        // Output Variables
-        let filteredSpectrum = mul(fullSpectrum, y: bandPassFilter.0)
-        var filteredPhase = phase
-        
-        // ----------------------------------------------------------------
-        // Determine Maximum Frequency
-        // ----------------------------------------------------------------
-        let maxFrequencyResult = max(filteredSpectrum)
-        let maxFrequency = freqs[maxFrequencyResult.1]
-        let maxPhase = filteredPhase[maxFrequencyResult.1]
-        
-        print("Amplitude: \(maxFrequencyResult.0)")
-        print("Frequency: \(maxFrequency)")
-        print("Phase: \(maxPhase + .pi / 2)")
-        
-        // ----------------------------------------------------------------
-        // Convert from polar coordinates back to rectangular coordinates.
-        // ----------------------------------------------------------------
-        
-        tempSplitComplex = DSPDoubleSplitComplex(realp: &mag, imagp: &phase)
-
-        var complexAsValue : UnsafeMutablePointer<Double>? = nil
-        
-        tempComplex.withUnsafeMutableBytes {
-            complexAsValue = $0.baseAddress?.bindMemory(to: Double.self, capacity: values.count)
+                // ----------------------------------------------------------------
+                // Forward FFT
+                // ----------------------------------------------------------------
+                
+                var valuesAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
+                
+                values.withUnsafeMutableBytes {
+                    valuesAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values1.count)
+                }
+                
+                // Scramble-pack the real data into complex buffer in just the way that's
+                // required by the real-to-complex FFT function that follows.
+                vDSP_ctozD(valuesAsComplex!, 2, &tempSplitComplex, 1, N2);
+                
+                // Do real->complex forward FFT
+                vDSP_fft_zripD(fftSetup, &tempSplitComplex, 1, LOG_N, FFTDirection(FFT_FORWARD));
+                
+                // ----------------------------------------------------------------
+                // Get the Frequency Spectrum
+                // ----------------------------------------------------------------
+                
+                var fftMagnitudes = [Double](repeating: 0.0, count: N/2)
+                vDSP_zvmagsD(&tempSplitComplex, 1, &fftMagnitudes, 1, N2);
+                
+                // vDSP_zvmagsD returns squares of the FFT magnitudes, so take the root here
+                let roots = sqrt(fftMagnitudes)
+                
+                // Normalize the Amplitudes
+                var fullSpectrum = [Double](repeating: 0.0, count: N/2)
+                vDSP_vsmulD(roots, vDSP_Stride(1), [1.0 / Double(N)], &fullSpectrum, 1, N2)
+                
+                // ----------------------------------------------------------------
+                // Convert from complex/rectangular (real, imaginary) coordinates
+                // to polar (magnitude and phase) coordinates.
+                // ----------------------------------------------------------------
+                
+                vDSP_zvabsD(&tempSplitComplex, 1, &mag, 1, N2);
+                
+                // Beware: Outputted phase here between -PI and +PI
+                // https://developer.apple.com/library/prerelease/ios/documentation/Accelerate/Reference/vDSPRef/index.html#//apple_ref/c/func/vDSP_zvphasD
+                vDSP_zvphasD(&tempSplitComplex, 1, &phase, 1, N2);
+                
+                // ----------------------------------------------------------------
+                // Bandpass Filtering
+                // ----------------------------------------------------------------
+                
+                // Get the Frequencies for the current Framerate
+                let freqs = getFrequencies(N,fps: fps)
+                // Get a Bandpass Filter
+                let bandPassFilter = generateBandPassFilter(freqs)
+                
+                // Multiply phase and magnitude with the bandpass filter
+                mag = mul(mag, y: bandPassFilter.0)
+                phase = mul(phase, y: bandPassFilter.0)
+                
+                // Output Variables
+                let filteredSpectrum = mul(fullSpectrum, y: bandPassFilter.0)
+                let filteredPhase = phase
+                
+                // ----------------------------------------------------------------
+                // Determine Maximum Frequency
+                // ----------------------------------------------------------------
+                let maxFrequencyResult = max(filteredSpectrum)
+                let maxFrequency = freqs[maxFrequencyResult.1]
+                let maxPhase = filteredPhase[maxFrequencyResult.1]
+                
+                print("Amplitude: \(maxFrequencyResult.0)")
+                print("Frequency: \(maxFrequency)")
+                print("Phase: \(maxPhase + .pi / 2)")
+            }
         }
         
-        vDSP_ztocD(&tempSplitComplex, 1, &tempComplex, 2, N2);
-        vDSP_rectD(complexAsValue!, 2, complexAsValue!, 2, N2);
-        vDSP_ctozD(&tempComplex, 2, &tempSplitComplex, 1, N2);
-        
-        // ----------------------------------------------------------------
-        // Do Inverse FFT
-        // ----------------------------------------------------------------
-        
-        // Create result
-        var result : [Double] = [Double](repeating: 0.0, count: N)
-        var resultAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
-        
-        result.withUnsafeMutableBytes {
-            resultAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values.count)
-        }
-
-        // Do complex->real inverse FFT.
-        vDSP_fft_zripD(fftSetup, &tempSplitComplex, 1, LOG_N, FFTDirection(FFT_INVERSE));
-        
-        // This leaves result in packed format. Here we unpack it into a real vector.
-        vDSP_ztocD(&tempSplitComplex, 1, resultAsComplex!, 2, N2);
-        
-        // Neither the forward nor inverse FFT does any scaling. Here we compensate for that.
-        var scale : Double = 0.5/Double(N);
-        var copyOfResult = result;
-        vDSP_vsmulD(&result, 1, &scale, &copyOfResult, 1, vDSP_Length(N));
-        result = copyOfResult
-        
-        // Print Result
-        for k in 0 ..< N {
-            print("\(k)   \(values[k])     \(result[k])")
+        mag.withUnsafeMutableBufferPointer { magPtr in
+            phase.withUnsafeMutableBufferPointer { phasePtr in
+                // ----------------------------------------------------------------
+                // Convert from polar coordinates back to rectangular coordinates.
+                // ----------------------------------------------------------------
+                
+                var tempSplitComplex = DSPDoubleSplitComplex(realp: magPtr.baseAddress!,
+                                                             imagp: phasePtr.baseAddress!)
+                
+                var complexAsValue : UnsafeMutablePointer<Double>? = nil
+                
+                tempComplex.withUnsafeMutableBytes {
+                    complexAsValue = $0.baseAddress?.bindMemory(to: Double.self, capacity: values.count)
+                }
+                
+                vDSP_ztocD(&tempSplitComplex, 1, &tempComplex, 2, N2);
+                vDSP_rectD(complexAsValue!, 2, complexAsValue!, 2, N2);
+                vDSP_ctozD(&tempComplex, 2, &tempSplitComplex, 1, N2);
+                
+                // ----------------------------------------------------------------
+                // Do Inverse FFT
+                // ----------------------------------------------------------------
+                
+                // Create result
+                var result : [Double] = [Double](repeating: 0.0, count: N)
+                var resultAsComplex : UnsafeMutablePointer<DSPDoubleComplex>? = nil
+                
+                result.withUnsafeMutableBytes {
+                    resultAsComplex = $0.baseAddress?.bindMemory(to: DSPDoubleComplex.self, capacity: values.count)
+                }
+                
+                // Do complex->real inverse FFT.
+                vDSP_fft_zripD(fftSetup, &tempSplitComplex, 1, LOG_N, FFTDirection(FFT_INVERSE));
+                
+                // This leaves result in packed format. Here we unpack it into a real vector.
+                vDSP_ztocD(&tempSplitComplex, 1, resultAsComplex!, 2, N2);
+                
+                // Neither the forward nor inverse FFT does any scaling. Here we compensate for that.
+                var scale : Double = 0.5/Double(N);
+                var copyOfResult = result;
+                vDSP_vsmulD(&result, 1, &scale, &copyOfResult, 1, vDSP_Length(N));
+                result = copyOfResult
+                
+                // Print Result
+                for k in 0 ..< N {
+                    print("\(k)   \(values[k])     \(result[k])")
+                }
+            }
         }
     }
     
